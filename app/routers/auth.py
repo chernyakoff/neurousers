@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import html
+import json
 import random
 import string
 import time
@@ -344,8 +345,8 @@ async def login_page(
   </div>
 
   <script>
-    const RETURN_TO = {html.escape(repr(safe_return_to), quote=False)};
-    const INVITE_REF_CODE = {html.escape(repr(safe_invite_ref_code), quote=False)};
+    const RETURN_TO = {json.dumps(safe_return_to, ensure_ascii=False)};
+    const INVITE_REF_CODE = {json.dumps(safe_invite_ref_code, ensure_ascii=False)};
     const statusEl = document.getElementById('status');
 
     async function loginWithPayload(payload) {{
