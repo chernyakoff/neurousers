@@ -11,8 +11,8 @@ api:
     expire_seconds: 3600
     refresh_expire_days: 30
   bot:
-    token: "REPLACE_WITH_REAL_BOT_TOKEN"
-    name: "LidorubLoginBot"
+    token: "7653458234:AAFLESK0Zoo4SbMI-Z8ZrF8HMQOLSsOOR_c"
+    name: "MockBot"
 
 auth:
   cors_origins:
@@ -24,4 +24,4 @@ auth:
   default_return_to: "http://localhost:5173/app"
 
 internal:
-  user_sync_token: "CHANGE_ME_USER_SYNC_TOKEN"
+  user_sync_token: "s70@dxw31Q6SbYVR2"

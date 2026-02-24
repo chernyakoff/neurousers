@@ -1,5 +1,5 @@
 import hmac
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict
@@ -140,7 +140,7 @@ async def add_balance(data: BalanceIn):
     dependencies=[Depends(internal_sync_required)],
 )
 async def create_user(data: CreateUserIn):
-    defaults = {
+    defaults: dict[str, Any] = {
         "username": data.username,
         "first_name": data.first_name,
         "last_name": data.last_name,
@@ -149,10 +149,8 @@ async def create_user(data: CreateUserIn):
     if data.role is not None:
         defaults["role"] = data.role
 
-    user = await orm.User.get_or_none(id=data.id)
-    if user is None:
-        await orm.User.create(id=data.id, **defaults)
-        return CreateUserOut(status="created", user_id=data.id)
-
-    await orm.User.filter(id=data.id).update(**defaults)
-    return CreateUserOut(status="updated", user_id=data.id)
+    _, created = await orm.User.update_or_create(
+        defaults=defaults,
+        id=data.id,
+    )
+    return CreateUserOut(status="created" if created else "updated", user_id=data.id)
