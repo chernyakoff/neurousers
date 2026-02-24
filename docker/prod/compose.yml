@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: neurousers-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: neurousers
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - neurousers-postgres-data-prod:/var/lib/postgresql/data
+    networks:
+      - dev
+
+  api:
+    build:
+      context: ../..
+      dockerfile: app/api/Dockerfile
+      target: prod
+    container_name: neurousers-api
+    restart: unless-stopped
+    volumes:
+      - ../../app:/app
+      - uv-venv-neurousers-api:/app/.venv
+      - ./config.yml:/app/config.yml
+    environment:
+      - UV_SYSTEM_PYTHON=1
+      - PYTHONPATH=/app
+    command: ["uv", "run", "python", "-m", "api"]
+    depends_on:
+      - postgres
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.routers.neurousers.rule=Host(`users.lidorub.online`)"
+      - "traefik.http.routers.neurousers.entrypoints=websecure"
+      - "traefik.http.routers.neurousers.tls.certresolver=letsencrypt"
+      - "traefik.http.services.neurousers.loadbalancer.server.port=8834"
+      - "traefik.http.routers.neurousers.service=neurousers"
+      - "traefik.http.routers.neurousers.middlewares=secure-headers@file"
+    networks:
+      - web
+      - dev
+
+volumes:
+  uv-venv-neurousers-api: {}
+  neurousers-postgres-data-prod: {}
+
+networks:
+  web:
+    name: web
+    driver: bridge
+    external: true
+  dev:
+    name: dev
+    driver: bridge

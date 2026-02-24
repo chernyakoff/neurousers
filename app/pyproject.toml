@@ -1,0 +1,25 @@
+[project]
+name = "neurousers"
+version = "0.1.0"
+description = "Standalone auth service for lidorub subdomains"
+authors = [{ name = "Michael Chernyakoff", email = "chernyakoff@gmail.com" }]
+dependencies = [
+    "aerich>=0.9.1",
+    "fastapi>=0.116.1",
+    "python-jose[cryptography]>=3.5.0",
+    "pyyaml>=6.0.2",
+    "tortoise-orm[accel,asyncpg]>=0.25.1",
+    "uvicorn[standard]>=0.35.0",
+    "watchfiles>=1.1.0",
+]
+requires-python = "==3.13.*"
+readme = "README.md"
+license = { text = "MIT" }
+
+[tool.pdm]
+distribution = false
+
+[tool.aerich]
+tortoise_orm = "config.tortoise_config"
+location = "./migrations"
+src_folder = "./"

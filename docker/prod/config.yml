@@ -1,0 +1,24 @@
+postgres:
+  dsn: "postgres://postgres:postgres@postgres:5432/neurousers"
+
+api:
+  port: 8834
+  host: "0.0.0.0"
+  url: "https://users.lidorub.online"
+  jwt:
+    secret: "CHANGE_ME_SHARED_JWT_SECRET"
+    algorithm: "HS256"
+    expire_seconds: 3600
+    refresh_expire_days: 30
+  bot:
+    token: "REPLACE_WITH_REAL_BOT_TOKEN"
+    name: "LidorubLoginBot"
+
+auth:
+  cors_origins:
+    - "https://lidorub.online"
+    - "https://content.lidorub.online"
+    - "https://tg.lidorub.online"
+    - "https://users.lidorub.online"
+  cookie_domain: ".lidorub.online"
+  default_return_to: "https://lidorub.online/app"

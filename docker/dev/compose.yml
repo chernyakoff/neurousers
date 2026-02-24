@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: neurousers-postgres
+    environment:
+      POSTGRES_DB: neurousers
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5436:5432"
+    volumes:
+      - neurousers-postgres-data-dev:/var/lib/postgresql/data
+    networks:
+      - dev
+
+  api:
+    build:
+      context: ../..
+      dockerfile: app/api/Dockerfile
+      target: dev
+    container_name: neurousers-api
+    ports:
+      - "8834:8834"
+    volumes:
+      - ../../app:/app
+      - uv-venv-neurousers-api:/app/.venv
+      - ./config.yml:/app/config.yml
+    environment:
+      - UV_SYSTEM_PYTHON=1
+      - PYTHONPATH=/app
+    command: ["uv", "run", "python", "-m", "api.dev"]
+    depends_on:
+      - postgres
+    networks:
+      - dev
+      - web
+
+volumes:
+  uv-venv-neurousers-api: {}
+  neurousers-postgres-data-dev: {}
+
+networks:
+  web:
+    driver: bridge
+  dev:
+    driver: bridge
