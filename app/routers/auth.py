@@ -10,7 +10,14 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from jose import ExpiredSignatureError, JWTError, jwt
 from tortoise import timezone as tz
 
-from api.dto.user import UserLoginIn, UserLoginOut, UserMeOut
+from dto.user import (
+    UserBalanceOut,
+    UserLoginIn,
+    UserLoginOut,
+    UserMeOut,
+    UserOpenRouterSettingsIn,
+    UserOpenRouterSettingsOut,
+)
 from config import config
 from models import orm
 
@@ -26,6 +33,9 @@ ALLOWED_RETURN_HOSTS = {
     "localhost:5273",
 }
 
+DEV_MOCK_USER_ID = 359107176
+DEV_MOCK_HASH = "mock"
+
 
 def _is_secure_cookie() -> bool:
     if config.api.url:
@@ -35,6 +45,11 @@ def _is_secure_cookie() -> bool:
 
 def _cookie_samesite() -> str:
     return "none" if _is_secure_cookie() else "lax"
+
+
+def _is_local_dev_env() -> bool:
+    url = (config.api.url or "").lower()
+    return "localhost" in url or "127.0.0.1" in url
 
 
 def _refresh_cookie_options() -> dict:
@@ -254,6 +269,17 @@ async def login_page(return_to: str | None = Query(default=None)):
 @router.post("/auth", response_model=UserLoginOut)
 async def login(data: UserLoginIn, response: Response):
     data_dict = data.model_dump()
+
+    # Local-only Telegram bypass for frontend development without public domain.
+    if (
+        _is_local_dev_env()
+        and data_dict["hash"] == DEV_MOCK_HASH
+        and data_dict["id"] == DEV_MOCK_USER_ID
+    ):
+        access_token = create_access_token({"sub": str(DEV_MOCK_USER_ID)})
+        set_refresh_cookie(response, DEV_MOCK_USER_ID)
+        return {"access_token": access_token}
+
     validate_telegram_data(data_dict)
 
     user = await orm.User.get_or_none(id=data.id)
@@ -361,3 +387,33 @@ async def callback_with_token(
     destination = _validate_return_to(return_to)
     sep = "&" if "?" in destination else "?"
     return RedirectResponse(f"{destination}{sep}access_token={quote(access_token)}", status_code=302)
+
+
+@router.get("/auth/openrouter-settings", response_model=UserOpenRouterSettingsOut)
+async def get_openrouter_settings(current: orm.User = Depends(get_current_user)):
+    return UserOpenRouterSettingsOut(**current.get_openrouter_settings())
+
+
+@router.post("/auth/openrouter-settings", response_model=UserOpenRouterSettingsOut)
+async def set_openrouter_settings(
+    data: UserOpenRouterSettingsIn,
+    current: orm.User = Depends(get_current_user),
+):
+    payload = data.model_dump(exclude_none=True)
+    if not payload:
+        raise HTTPException(400, "No fields to update")
+
+    await current.set_openrouter_settings(
+        api_key=payload.get("api_key"),
+        api_hash=payload.get("api_hash"),
+        model=payload.get("model"),
+    )
+    return UserOpenRouterSettingsOut(**current.get_openrouter_settings())
+
+
+@router.get("/auth/balance", response_model=UserBalanceOut)
+async def get_balance(current: orm.User = Depends(get_current_user)):
+    return UserBalanceOut(
+        balance_kopecks=current.balance,
+        balance_rub=current.get_balance_rub(),
+    )

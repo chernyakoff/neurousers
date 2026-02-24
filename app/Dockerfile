@@ -11,4 +11,4 @@ RUN uv sync
 
 FROM base AS prod
 COPY app/ ./
-CMD ["uv", "run", "python", "-m", "api"]
+CMD ["uv", "run", "python", "-m", "main"]

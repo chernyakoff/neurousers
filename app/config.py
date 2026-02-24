@@ -32,6 +32,10 @@ class Auth(BaseModel):
     default_return_to: str = "https://lidorub.online/app"
 
 
+class Internal(BaseModel):
+    user_sync_token: SecretStr | None = None
+
+
 class Postgres(BaseModel):
     dsn: PostgresDsn
 
@@ -39,6 +43,7 @@ class Postgres(BaseModel):
 class Settings(BaseModel):
     api: Api
     auth: Auth = Field(default_factory=Auth)
+    internal: Internal = Field(default_factory=Internal)
     postgres: Postgres
 
     @classmethod

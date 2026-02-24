@@ -21,3 +21,6 @@ auth:
     - "http://localhost:3000"
   cookie_domain: null
   default_return_to: "http://localhost:5173/app"
+
+internal:
+  user_sync_token: "CHANGE_ME_USER_SYNC_TOKEN"

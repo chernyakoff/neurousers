@@ -1,7 +1,9 @@
+name: neurousers-dev
+
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: neurousers-postgres
+    container_name: neurousers-dev-postgres
     environment:
       POSTGRES_DB: neurousers
       POSTGRES_USER: postgres
@@ -16,19 +18,19 @@ services:
   api:
     build:
       context: ../..
-      dockerfile: app/api/Dockerfile
+      dockerfile: app/Dockerfile
       target: dev
-    container_name: neurousers-api
+    container_name: neurousers-dev-api
     ports:
       - "8834:8834"
     volumes:
       - ../../app:/app
-      - uv-venv-neurousers-api:/app/.venv
+      - uv-venv-neurousers-dev-api:/app/.venv
       - ./config.yml:/app/config.yml
     environment:
       - UV_SYSTEM_PYTHON=1
       - PYTHONPATH=/app
-    command: ["uv", "run", "python", "-m", "api.dev"]
+    command: ["uv", "run", "python", "-m", "dev"]
     depends_on:
       - postgres
     networks:
@@ -36,7 +38,7 @@ services:
       - web
 
 volumes:
-  uv-venv-neurousers-api: {}
+  uv-venv-neurousers-dev-api: {}
   neurousers-postgres-data-dev: {}
 
 networks:

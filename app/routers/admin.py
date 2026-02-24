@@ -1,15 +1,17 @@
+import hmac
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from pydantic import BaseModel, ConfigDict
 
-from api.routers.auth import (
+from routers.auth import (
     admin_required,
     create_impersonation_tokens,
     get_real_user,
     set_refresh_cookie,
     set_refresh_cookie_raw,
 )
+from config import config
 from models import orm
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -41,6 +43,33 @@ class BalanceIn(BaseModel):
 class BalanceOut(BaseModel):
     status: Literal["success", "error"]
     message: str
+
+
+class CreateUserIn(BaseModel):
+    id: int
+    username: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    photo_url: str | None = None
+    role: orm.Role | None = None
+
+    # Keep payload tolerant: CLI may send extra fields from neurogram user model.
+    model_config = ConfigDict(extra="ignore")
+
+
+class CreateUserOut(BaseModel):
+    status: Literal["created", "updated"]
+    user_id: int
+
+
+def internal_sync_required(x_internal_token: str | None = Header(default=None)) -> None:
+    token = config.internal.user_sync_token
+    if token is None:
+        raise HTTPException(status_code=503, detail="User sync token is not configured")
+
+    expected = token.get_secret_value()
+    if not x_internal_token or not hmac.compare_digest(x_internal_token, expected):
+        raise HTTPException(status_code=401, detail="Invalid internal token")
 
 
 @router.post(
@@ -103,3 +132,27 @@ async def add_balance(data: BalanceIn):
 
     await user.add_balance(data.amount)
     return BalanceOut(status="success", message=f"Баланс пополнен на {data.amount} руб")
+
+
+@router.post(
+    "/create-user",
+    response_model=CreateUserOut,
+    dependencies=[Depends(internal_sync_required)],
+)
+async def create_user(data: CreateUserIn):
+    defaults = {
+        "username": data.username,
+        "first_name": data.first_name,
+        "last_name": data.last_name,
+        "photo_url": data.photo_url,
+    }
+    if data.role is not None:
+        defaults["role"] = data.role
+
+    user = await orm.User.get_or_none(id=data.id)
+    if user is None:
+        await orm.User.create(id=data.id, **defaults)
+        return CreateUserOut(status="created", user_id=data.id)
+
+    await orm.User.filter(id=data.id).update(**defaults)
+    return CreateUserOut(status="updated", user_id=data.id)

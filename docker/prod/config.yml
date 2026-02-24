@@ -22,3 +22,6 @@ auth:
     - "https://users.lidorub.online"
   cookie_domain: ".lidorub.online"
   default_return_to: "https://lidorub.online/app"
+
+internal:
+  user_sync_token: "CHANGE_ME_USER_SYNC_TOKEN"

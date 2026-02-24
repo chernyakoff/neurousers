@@ -3,8 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers.admin import router as admin_router
-from api.routers.auth import router as auth_router
+from routers.admin import router as admin_router
+from routers.auth import router as auth_router
 from config import config, init_db, shutdown_db
 
 

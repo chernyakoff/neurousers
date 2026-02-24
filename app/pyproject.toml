@@ -1,7 +1,7 @@
 [project]
 name = "neurousers"
 version = "0.1.0"
-description = "Standalone auth service for lidorub subdomains"
+description = "Standalone user service"
 authors = [{ name = "Michael Chernyakoff", email = "chernyakoff@gmail.com" }]
 dependencies = [
     "aerich>=0.9.1",
@@ -16,8 +16,6 @@ requires-python = "==3.13.*"
 readme = "README.md"
 license = { text = "MIT" }
 
-[tool.pdm]
-distribution = false
 
 [tool.aerich]
 tortoise_orm = "config.tortoise_config"

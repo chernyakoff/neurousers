@@ -50,3 +50,35 @@ class User(Model):
             return
         self.balance += rubles * 100
         await self.save(update_fields=["balance"])
+
+    async def set_openrouter_settings(
+        self,
+        *,
+        api_key: str | None = None,
+        api_hash: str | None = None,
+        model: str | None = None,
+    ) -> None:
+        updates: dict[str, str | None] = {}
+        if api_key is not None:
+            updates["or_api_key"] = api_key
+        if api_hash is not None:
+            updates["or_api_hash"] = api_hash
+        if model is not None:
+            updates["or_model"] = model
+
+        if not updates:
+            return
+
+        await User.filter(id=self.id).update(**updates)
+        for field, value in updates.items():
+            setattr(self, field, value)
+
+    def get_openrouter_settings(self) -> dict[str, str | None]:
+        return {
+            "api_key": self.or_api_key,
+            "api_hash": self.or_api_hash,
+            "model": self.or_model,
+        }
+
+    def get_balance_rub(self) -> float:
+        return self.balance / 100

@@ -7,7 +7,7 @@ GRACEFUL_TIMEOUT = 3
 
 
 def target():
-    proc = subprocess.Popen([sys.executable, "-m", "api"])
+    proc = subprocess.Popen([sys.executable, "-m", "main"])
     try:
         proc.wait()
     except KeyboardInterrupt:
