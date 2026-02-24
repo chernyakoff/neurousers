@@ -190,8 +190,61 @@ def admin_required(user: orm.User = Depends(get_real_user)) -> orm.User:
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(return_to: str | None = Query(default=None)):
     safe_return_to = _validate_return_to(return_to)
-    escaped_return = html.escape(safe_return_to, quote=True)
     bot_name = html.escape(config.api.bot.name, quote=True)
+    show_mock_login = _is_local_dev_env()
+    show_telegram_widget = not show_mock_login
+    mock_button_html = (
+        """
+    <button id="mock-login-btn" class="mock-btn" type="button">
+      Mock login (dev)
+    </button>
+"""
+        if show_mock_login
+        else ""
+    )
+    mock_script = (
+        """
+    const mockBtn = document.getElementById('mock-login-btn');
+    if (mockBtn) {
+      mockBtn.addEventListener('click', async () => {
+        mockBtn.disabled = true;
+        const original = mockBtn.textContent;
+        mockBtn.textContent = 'Signing in...';
+        try {
+          await loginWithPayload({
+            id: 359107176,
+            first_name: 'Mike',
+            last_name: null,
+            username: 'mike',
+            photo_url: null,
+            auth_date: Math.floor(Date.now() / 1000),
+            hash: 'mock',
+          });
+        } catch (e) {
+          mockBtn.disabled = false;
+          mockBtn.textContent = original;
+        }
+      });
+    }
+"""
+        if show_mock_login
+        else ""
+    )
+    telegram_script = (
+        f"""
+    const script = document.createElement('script');
+    script.src = 'https://telegram.org/js/telegram-widget.js?22';
+    script.async = true;
+    script.setAttribute('data-telegram-login', '{bot_name}');
+    script.setAttribute('data-size', 'large');
+    script.setAttribute('data-radius', '8');
+    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
+    script.setAttribute('data-request-access', 'write');
+    document.getElementById('tg-login').appendChild(script);
+"""
+        if show_telegram_widget
+        else ""
+    )
 
     page = f"""
 <!doctype html>
@@ -199,36 +252,99 @@ async def login_page(return_to: str | None = Query(default=None)):
 <head>
   <meta charset=\"utf-8\" />
   <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
-  <title>Auth Login</title>
+  <meta name=\"color-scheme\" content=\"light dark\" />
+  <title>Lidorub Users Login</title>
   <style>
-    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; background: #f4f6f8; }}
-    .wrap {{ max-width: 480px; margin: 12vh auto; background: #fff; padding: 28px; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.08); }}
-    h1 {{ margin: 0 0 10px; font-size: 24px; }}
-    p {{ margin: 0 0 18px; color: #4b5563; }}
-    .meta {{ margin-top: 14px; color: #6b7280; font-size: 13px; word-break: break-all; }}
+    :root {{
+      color-scheme: light dark;
+      --bg: #f3f6fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --line: rgba(15, 23, 42, 0.12);
+      --shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
+      --accent: #0ea5e9;
+      --accent-hover: #0284c7;
+    }}
+    @media (prefers-color-scheme: dark) {{
+      :root {{
+        --bg: #0a1222;
+        --card: #111b30;
+        --text: #e2e8f0;
+        --line: rgba(148, 163, 184, 0.25);
+        --shadow: 0 22px 50px rgba(2, 6, 23, 0.55);
+        --accent: #38bdf8;
+        --accent-hover: #0ea5e9;
+      }}
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }}
+    .wrap {{
+      width: 100%;
+      max-width: 520px;
+      border: 1px solid var(--line);
+      background: color-mix(in srgb, var(--card) 95%, transparent);
+      box-shadow: var(--shadow);
+      border-radius: 22px;
+      padding: 26px;
+      backdrop-filter: blur(8px);
+    }}
+    h1 {{ margin: 0 0 18px; font-size: 28px; line-height: 1.2; text-align: center; }}
+    .login-row {{
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+    }}
+    .mock-btn {{
+      border: 1px solid var(--line);
+      background: var(--accent);
+      color: #fff;
+      border-radius: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: .2s background ease;
+    }}
+    .mock-btn:hover {{ background: var(--accent-hover); }}
+    .mock-btn:disabled {{ opacity: .7; cursor: wait; }}
+    .status {{
+      margin-top: 12px;
+      min-height: 22px;
+      font-size: 13px;
+      text-align: center;
+    }}
+    .status.error {{ color: #ef4444; }}
   </style>
 </head>
 <body>
   <div class=\"wrap\">
-    <h1>Sign in with Telegram</h1>
-    <p>Unified login for all Lidorub services.</p>
-    <div id=\"tg-login\"></div>
-    <div class=\"meta\">return_to: <span id=\"rt\">{escaped_return}</span></div>
+    <h1>Логин</h1>
+    <div class=\"login-row\">
+      <div id=\"tg-login\"></div>
+{mock_button_html}
+    </div>
+    <div id=\"status\" class=\"status\"></div>
   </div>
 
   <script>
     const RETURN_TO = {html.escape(repr(safe_return_to), quote=False)};
+    const statusEl = document.getElementById('status');
 
-    window.onTelegramAuth = async (user) => {{
-      const payload = {{
-        id: user.id,
-        first_name: user.first_name ?? null,
-        last_name: user.last_name ?? null,
-        username: user.username ?? null,
-        photo_url: user.photo_url ?? null,
-        auth_date: user.auth_date,
-        hash: user.hash,
-      }};
+    async function loginWithPayload(payload) {{
+      if (statusEl) {{
+        statusEl.classList.remove('error');
+        statusEl.textContent = 'Авторизация...';
+      }}
 
       const resp = await fetch('/auth', {{
         method: 'POST',
@@ -239,26 +355,33 @@ async def login_page(return_to: str | None = Query(default=None)):
 
       if (!resp.ok) {{
         const text = await resp.text();
-        alert('Login failed: ' + text);
-        return;
+        if (statusEl) {{
+          statusEl.textContent = 'Login failed: ' + text;
+          statusEl.classList.add('error');
+        }}
+        throw new Error(text);
       }}
 
       const data = await resp.json();
-      try {{
-        localStorage.setItem('accessToken', data.access_token);
-      }} catch (_e) {{}}
-      window.location.href = RETURN_TO;
+      if (statusEl) statusEl.textContent = 'Успешно. Переход...';
+      const callbackUrl = `/auth/callback?access_token=${{encodeURIComponent(data.access_token)}}&return_to=${{encodeURIComponent(RETURN_TO)}}`;
+      window.location.href = callbackUrl;
+    }}
+
+    window.onTelegramAuth = async (user) => {{
+      await loginWithPayload({{
+        id: user.id,
+        first_name: user.first_name ?? null,
+        last_name: user.last_name ?? null,
+        username: user.username ?? null,
+        photo_url: user.photo_url ?? null,
+        auth_date: user.auth_date,
+        hash: user.hash,
+      }});
     }};
 
-    const script = document.createElement('script');
-    script.src = 'https://telegram.org/js/telegram-widget.js?22';
-    script.async = true;
-    script.setAttribute('data-telegram-login', '{bot_name}');
-    script.setAttribute('data-size', 'large');
-    script.setAttribute('data-radius', '8');
-    script.setAttribute('data-onauth', 'onTelegramAuth(user)');
-    script.setAttribute('data-request-access', 'write');
-    document.getElementById('tg-login').appendChild(script);
+{telegram_script}
+{mock_script}
   </script>
 </body>
 </html>

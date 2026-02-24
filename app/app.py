@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers.admin import router as admin_router
@@ -37,5 +37,10 @@ app.include_router(admin_router)
 
 
 @app.get("/")
+def root():
+    raise HTTPException(status_code=403, detail="Forbidden")
+
+
+@app.get("/health")
 def health_check():
     return {"status": "ok", "service": "neurousers"}

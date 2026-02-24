@@ -1,8 +1,10 @@
 import hmac
+from datetime import datetime
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from pydantic import BaseModel, ConfigDict
+from tortoise.expressions import F
 
 from routers.auth import (
     admin_required,
@@ -52,6 +54,12 @@ class CreateUserIn(BaseModel):
     last_name: str | None = None
     photo_url: str | None = None
     role: orm.Role | None = None
+    license_end_date: datetime | None = None
+    balance: int | None = None
+    ref_code: str | None = None
+    or_api_key: str | None = None
+    or_api_hash: str | None = None
+    or_model: str | None = None
 
     # Keep payload tolerant: CLI may send extra fields from neurogram user model.
     model_config = ConfigDict(extra="ignore")
@@ -60,6 +68,35 @@ class CreateUserIn(BaseModel):
 class CreateUserOut(BaseModel):
     status: Literal["created", "updated"]
     user_id: int
+
+
+class InternalUserStateIn(BaseModel):
+    user_id: int
+
+
+class InternalUserStateOut(BaseModel):
+    user_id: int
+    balance_kopecks: int
+    api_key: str | None
+    api_hash: str | None
+    model: str | None
+
+
+class InternalSetOpenRouterIn(BaseModel):
+    user_id: int
+    api_key: str | None = None
+    api_hash: str | None = None
+    model: str | None = None
+
+
+class InternalDebitBalanceIn(BaseModel):
+    user_id: int
+    amount_kopecks: int
+
+
+class InternalDebitBalanceOut(BaseModel):
+    status: Literal["ok", "insufficient_funds", "not_found"]
+    balance_kopecks: int | None
 
 
 def internal_sync_required(x_internal_token: str | None = Header(default=None)) -> None:
@@ -140,17 +177,88 @@ async def add_balance(data: BalanceIn):
     dependencies=[Depends(internal_sync_required)],
 )
 async def create_user(data: CreateUserIn):
-    defaults: dict[str, Any] = {
-        "username": data.username,
-        "first_name": data.first_name,
-        "last_name": data.last_name,
-        "photo_url": data.photo_url,
-    }
-    if data.role is not None:
-        defaults["role"] = data.role
+    # Partial upsert: do not overwrite existing values with nulls when fields are omitted.
+    defaults: dict[str, Any] = data.model_dump(
+        exclude={"id"},
+        exclude_none=True,
+    )
 
     _, created = await orm.User.update_or_create(
         defaults=defaults,
         id=data.id,
     )
     return CreateUserOut(status="created" if created else "updated", user_id=data.id)
+
+
+@router.post(
+    "/internal/user-state",
+    response_model=InternalUserStateOut,
+    dependencies=[Depends(internal_sync_required)],
+)
+async def internal_user_state(data: InternalUserStateIn):
+    user = await orm.User.get_or_none(id=data.user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    settings = user.get_openrouter_settings()
+    return InternalUserStateOut(
+        user_id=user.id,
+        balance_kopecks=user.balance,
+        api_key=settings["api_key"],
+        api_hash=settings["api_hash"],
+        model=settings["model"],
+    )
+
+
+@router.post(
+    "/internal/set-openrouter-settings",
+    response_model=InternalUserStateOut,
+    dependencies=[Depends(internal_sync_required)],
+)
+async def internal_set_openrouter_settings(data: InternalSetOpenRouterIn):
+    user = await orm.User.get_or_none(id=data.user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await user.set_openrouter_settings(
+        api_key=data.api_key,
+        api_hash=data.api_hash,
+        model=data.model,
+    )
+    await user.refresh_from_db()
+    settings = user.get_openrouter_settings()
+    return InternalUserStateOut(
+        user_id=user.id,
+        balance_kopecks=user.balance,
+        api_key=settings["api_key"],
+        api_hash=settings["api_hash"],
+        model=settings["model"],
+    )
+
+
+@router.post(
+    "/internal/debit-balance",
+    response_model=InternalDebitBalanceOut,
+    dependencies=[Depends(internal_sync_required)],
+)
+async def internal_debit_balance(data: InternalDebitBalanceIn):
+    if data.amount_kopecks <= 0:
+        raise HTTPException(status_code=400, detail="amount_kopecks must be positive")
+
+    user = await orm.User.get_or_none(id=data.user_id)
+    if user is None:
+        return InternalDebitBalanceOut(status="not_found", balance_kopecks=None)
+
+    updated = await orm.User.filter(
+        id=data.user_id,
+        balance__gte=data.amount_kopecks,
+    ).update(balance=F("balance") - data.amount_kopecks)
+
+    if not updated:
+        fresh = await orm.User.get(id=data.user_id)
+        return InternalDebitBalanceOut(
+            status="insufficient_funds",
+            balance_kopecks=fresh.balance,
+        )
+
+    fresh = await orm.User.get(id=data.user_id)
+    return InternalDebitBalanceOut(status="ok", balance_kopecks=fresh.balance)
