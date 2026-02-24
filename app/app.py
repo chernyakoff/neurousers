@@ -15,7 +15,12 @@ async def lifespan(app: FastAPI):
     await shutdown_db()
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 
 cors_origins = config.auth.cors_origins or [
     "https://lidorub.online",
