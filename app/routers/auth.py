@@ -1,6 +1,8 @@
 import hashlib
 import hmac
 import html
+import random
+import string
 import time
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
@@ -188,8 +190,13 @@ def admin_required(user: orm.User = Depends(get_real_user)) -> orm.User:
 
 
 @router.get("/login", response_class=HTMLResponse)
-async def login_page(return_to: str | None = Query(default=None)):
+async def login_page(
+    return_to: str | None = Query(default=None),
+    invite_ref_code: str | None = Query(default=None),
+    ref: str | None = Query(default=None),
+):
     safe_return_to = _validate_return_to(return_to)
+    safe_invite_ref_code = invite_ref_code or ref
     bot_name = html.escape(config.api.bot.name, quote=True)
     show_mock_login = _is_local_dev_env()
     show_telegram_widget = not show_mock_login
@@ -338,6 +345,7 @@ async def login_page(return_to: str | None = Query(default=None)):
 
   <script>
     const RETURN_TO = {html.escape(repr(safe_return_to), quote=False)};
+    const INVITE_REF_CODE = {html.escape(repr(safe_invite_ref_code), quote=False)};
     const statusEl = document.getElementById('status');
 
     async function loginWithPayload(payload) {{
@@ -369,7 +377,7 @@ async def login_page(return_to: str | None = Query(default=None)):
     }}
 
     window.onTelegramAuth = async (user) => {{
-      await loginWithPayload({{
+      const payload = {{
         id: user.id,
         first_name: user.first_name ?? null,
         last_name: user.last_name ?? null,
@@ -377,7 +385,11 @@ async def login_page(return_to: str | None = Query(default=None)):
         photo_url: user.photo_url ?? null,
         auth_date: user.auth_date,
         hash: user.hash,
-      }});
+      }};
+      if (INVITE_REF_CODE) {{
+        payload.invite_ref_code = INVITE_REF_CODE;
+      }}
+      await loginWithPayload(payload);
     }};
 
 {telegram_script}
@@ -387,6 +399,20 @@ async def login_page(return_to: str | None = Query(default=None)):
 </html>
 """
     return HTMLResponse(page)
+
+
+def generate_ref_code(length: int = 8) -> str:
+    alphabet = string.ascii_uppercase + string.digits
+    return "".join(random.choice(alphabet) for _ in range(length))
+
+
+async def create_unique_ref_code() -> str:
+    for _ in range(10):
+        code = generate_ref_code()
+        exists = await orm.User.filter(ref_code=code).exists()
+        if not exists:
+            return code
+    raise RuntimeError("Failed to generate unique ref_code")
 
 
 @router.post("/auth", response_model=UserLoginOut)
@@ -403,9 +429,17 @@ async def login(data: UserLoginIn, response: Response):
         set_refresh_cookie(response, DEV_MOCK_USER_ID)
         return {"access_token": access_token}
 
+    invite_ref_code = data_dict.pop("invite_ref_code", None)
+
     validate_telegram_data(data_dict)
 
     user = await orm.User.get_or_none(id=data.id)
+    referrer = None
+    if invite_ref_code:
+        referrer = await orm.User.get_or_none(ref_code=invite_ref_code)
+        if referrer and referrer.id == data.id:
+            referrer = None
+
     if not user:
         user = await orm.User.create(
             id=data.id,
@@ -413,6 +447,8 @@ async def login(data: UserLoginIn, response: Response):
             first_name=data.first_name,
             last_name=data.last_name,
             photo_url=data.photo_url,
+            ref_code=await create_unique_ref_code(),
+            referred_by=referrer,
         )
     else:
         await orm.User.filter(id=user.id).update(
@@ -421,6 +457,17 @@ async def login(data: UserLoginIn, response: Response):
             last_name=data.last_name,
             photo_url=data.photo_url,
         )
+        if not user.ref_code:
+            user.ref_code = await create_unique_ref_code()
+            await user.save(update_fields=["ref_code"])
+        if (
+            not user.referred_by
+            and referrer
+            and not user.license_end_date
+            and referrer.id != user.id
+        ):
+            user.referred_by = referrer
+            await user.save(update_fields=["referred_by"])
 
     access_token = create_access_token({"sub": str(user.id)})
     set_refresh_cookie(response, user.id)

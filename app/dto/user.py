@@ -9,6 +9,7 @@ class UserLoginIn(BaseModel):
     last_name: str | None
     username: str | None
     photo_url: str | None
+    invite_ref_code: str | None = None
 
 
 class UserLoginOut(BaseModel):

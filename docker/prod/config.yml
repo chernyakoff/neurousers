@@ -6,14 +6,13 @@ api:
   host: "0.0.0.0"
   url: "https://users.lidorub.online"
   jwt:
-    secret: "CHANGE_ME_SHARED_JWT_SECRET"
+    secret: "%0DK&B7jlxB!8T6lY"
     algorithm: "HS256"
     expire_seconds: 3600
     refresh_expire_days: 30
   bot:
-    token: "REPLACE_WITH_REAL_BOT_TOKEN"
+    token: "8207129398:AAGRe9ytQZJVuCtZ2NCSp0Fs5GhyVt_rD8s"
     name: "LidorubLoginBot"
-
 auth:
   cors_origins:
     - "https://lidorub.online"

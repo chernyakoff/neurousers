@@ -6,7 +6,7 @@ api:
   host: "0.0.0.0"
   url: "http://localhost:8834"
   jwt:
-    secret: "CHANGE_ME_SHARED_JWT_SECRET"
+    secret: "%0DK&B7jlxB!8T6lY"
     algorithm: "HS256"
     expire_seconds: 3600
     refresh_expire_days: 30
