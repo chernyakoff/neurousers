@@ -8,6 +8,7 @@ Standalone auth service for Lidorub subdomains.
 - `POST /auth/refresh` Refresh access token via refresh cookie.
 - `POST /auth/logout` Clear refresh cookie.
 - `GET /auth/me` Current user by bearer access token.
+- `GET /partners/` Current user partner tree (`referred_by` + `referrals`).
 - `GET /auth/openrouter-settings` Get current user OpenRouter settings.
 - `POST /auth/openrouter-settings` Update current user OpenRouter settings.
 - `GET /auth/balance` Get current user balance (kopecks and rubles).
@@ -19,7 +20,7 @@ Standalone auth service for Lidorub subdomains.
 - `POST /admin/create-user` Internal user upsert for cross-service sync (`X-Internal-Token`).
 
 ## Local start (docker)
-1. `cd /home/mike/work/docker/neurousers/docker/dev`
+1. `cd /home/mike/work/NEURO/users/docker/dev`
 2. `docker compose up -d`
 3. `docker compose exec api uv run aerich init-db`
 
