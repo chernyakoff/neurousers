@@ -99,6 +99,19 @@ class InternalDebitBalanceOut(BaseModel):
     balance_kopecks: int | None
 
 
+class InternalUsernamesIn(BaseModel):
+    user_ids: list[int]
+
+
+class InternalUsernameOut(BaseModel):
+    user_id: int
+    username: str | None
+
+
+class InternalUsernamesOut(BaseModel):
+    items: list[InternalUsernameOut]
+
+
 def internal_sync_required(x_internal_token: str | None = Header(default=None)) -> None:
     token = config.internal.user_sync_token
     if token is None:
@@ -232,6 +245,27 @@ async def internal_set_openrouter_settings(data: InternalSetOpenRouterIn):
         api_key=settings["api_key"],
         api_hash=settings["api_hash"],
         model=settings["model"],
+    )
+
+
+@router.post(
+    "/internal/usernames",
+    response_model=InternalUsernamesOut,
+    dependencies=[Depends(internal_sync_required)],
+)
+async def internal_usernames(data: InternalUsernamesIn):
+    unique_ids = list(dict.fromkeys(data.user_ids))
+    if not unique_ids:
+        return InternalUsernamesOut(items=[])
+
+    rows = await orm.User.filter(id__in=unique_ids).values("id", "username")
+    usernames_by_id = {int(row["id"]): row["username"] for row in rows}
+
+    return InternalUsernamesOut(
+        items=[
+            InternalUsernameOut(user_id=user_id, username=usernames_by_id.get(user_id))
+            for user_id in unique_ids
+        ]
     )
 
 
